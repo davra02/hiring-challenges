@@ -101,14 +101,27 @@ The `csp` block is the extension telling you what it needs in order to work. It 
 **T1 — Policy model and assembly engine (Java).**
 A CSP policy is not a string. Model it, and build an engine that composes one from four layers:
 
-1. a **platform ceiling** — the maximum any page may ever be granted,
+1. a **platform ceiling** — the most permissive policy any page may ever be granted,
 2. **tenant** configuration,
 3. **extension** requirements, taken from the descriptors of the extensions actually placed on the page being rendered,
 4. a **per-route override**.
 
+The ceiling is a maximum, not a default. Layers 2–4 may remove what it permits; they may never add anything it does not already permit. Make that property structural, not a code comment.
+
+To keep the question decidable, the ceiling is **total**: it names every directive the platform governs, and a lower layer may not introduce a directive the ceiling does not name. Whatever it does name, a lower layer may narrow.
+
+"Narrow" is the part we want you to think about, because it is not subtraction between sets of strings. Decide how you handle each of these, and say so in your write-up:
+
+- `https://cdn.example.com` offered against a ceiling that permits `https:` — already covered, or rejected?
+- `*`, and what it does and does not cover. It is not the universal set.
+- `'none'`, which is not the same thing as saying nothing.
+- `'strict-dynamic'` and `'unsafe-inline'`, which are not sources and cannot be intersected with one. They change what the sources beside them mean.
+- nonces and hashes, which are per-response and therefore cannot appear in a static ceiling at all.
+
+There is no single right answer to those. There is a wrong one, which is to treat a source list as a set of strings and take the intersection.
+
 Requirements:
 
-- Layers 2–4 may only narrow *within* the ceiling. Nothing below the platform layer may escape it. Make that property structural, not a code comment.
 - Every incoming source expression is untrusted input. Validate it before it reaches a header value.
 - Serialization must be **canonical and deterministic**: same inputs, same bytes, every time. Directives ordered, sources deduplicated.
 - Composition is on the request hot path. Make it cheap, and say in your write-up what you cached, what the cache key is, and what invalidates it.
