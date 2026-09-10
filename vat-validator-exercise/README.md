@@ -1,11 +1,11 @@
-# VAT Number Validation — Frontend Infrastructure Exercise
+# VAT Number Validation — Exercise
 
-**Role:** Mid-level Software Engineer, Frontend Infrastructure
+**Role:** Mid-level Software Engineer, Content Management 
 **Format:** Take-home against this scaffold, followed by a 60-minute live defense
 
 ## Context
 
-You are joining the Frontend Infrastructure team. Checkout has a VAT number field. It has to tell the customer, while they type, whether the number they entered is registered.
+You are joining the Content Management team. Checkout has a VAT number field. It has to tell the customer, while they type, whether the number they entered is registered.
 
 The answer comes from an external VAT registry that we do not own and cannot change. It is slow, it is rate limited to **ten lookups a minute**, it needs an API key that must never reach a browser, and it sometimes cannot reach the member state that owns the number — in which case it says so, and says nothing about whether the number is good.
 
