@@ -1,7 +1,7 @@
 # VAT Number Validation — Frontend Infrastructure Exercise
 
 **Role:** Mid-level Software Engineer, Frontend Infrastructure
-**Format:** ~4h take-home against this scaffold, followed by a 60-minute live defense
+**Format:** Take-home against this scaffold, followed by a 60-minute live defense
 
 ## Context
 
@@ -94,7 +94,7 @@ Enable the three disabled server tests and the three skipped browser tests, keep
 
 ## Ground Rules
 
-- **Time-box: ~4 hours.** Doing less and understanding all of it beats doing more and understanding some of it. If you cut scope, say so and say why.
+- **Take the time you need, and spend it on understanding rather than coverage.** Doing less and understanding all of it beats doing more and understanding some of it. If you cut scope, say so and say why.
 - **You may use AI tools. We assume you will.** The interview is a 60-minute defense: you will explain your choices, we will change your code in front of you, and we will change the requirements and ask what your design does about it. Code you cannot explain is worse than code you did not write.
 - **You do not own the registry.** `UpstreamVatServlet` stands in for a third party. Changing it is not a solution.
 - **The app runs when you receive it and must run when you return it.**

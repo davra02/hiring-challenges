@@ -1,7 +1,7 @@
 # Inline Approve and Reject — Frontend Infrastructure Exercise
 
 **Role:** Mid-level Software Engineer, Frontend Infrastructure
-**Format:** ~3h take-home against this scaffold, followed by a 45-minute live defense
+**Format:** Take-home against this scaffold, followed by a 45-minute live defense
 
 ## Context
 
@@ -80,7 +80,7 @@ Enable the two disabled server tests and the three skipped browser tests, keep t
 
 ## Ground Rules
 
-- **Time-box: ~3 hours.** Doing less and understanding all of it beats doing more and understanding some of it.
+- **Take the time you need, and spend it on understanding rather than coverage.** Doing less and understanding all of it beats doing more and understanding some of it.
 - **You may use AI tools. We assume you will.** The interview is a 45-minute defense: you will explain your choices, we will change your code in front of you, and we will change the requirements and ask what your design does about it.
 - **`fds.js` is not yours.** It stands in for a platform component. Work with the contract it gives you.
 - **The app runs when you receive it and must run when you return it.**

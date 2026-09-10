@@ -1,7 +1,7 @@
 # Frontend Resource Caching — Frontend Infrastructure Exercise
 
 **Role:** Mid-level Software Engineer, Frontend Infrastructure
-**Format:** ~4h take-home against this scaffold, followed by a 60-minute live defense
+**Format:** Take-home against this scaffold, followed by a 60-minute live defense
 
 ## Context
 
@@ -97,7 +97,7 @@ Enable and pass the three disabled filter tests, add the T4 test, and keep the e
 
 ## Ground Rules
 
-- **Time-box: ~4 hours.** Doing less and understanding all of it beats doing more and understanding some of it. If you cut scope, say so and say why.
+- **Take the time you need, and spend it on understanding rather than coverage.** Doing less and understanding all of it beats doing more and understanding some of it. If you cut scope, say so and say why.
 - **You may use AI tools. We assume you will.** The interview is a 60-minute defense: you will explain your choices, we will change your code in front of you, and we will change the requirements and ask what your design does about it. Code you cannot explain is worse than code you did not write.
 - **Work with the scaffold, not around it.** If you replace a seam rather than fill it, say why.
 - **The app runs when you receive it and must run when you return it.**
