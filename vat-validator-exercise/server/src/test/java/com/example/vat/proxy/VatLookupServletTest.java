@@ -1,10 +1,16 @@
 package com.example.vat.proxy;
 
 import com.example.vat.HostServer;
+import com.example.vat.upstream.UpstreamVatServlet;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.File;
+import java.io.IOException;
+
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -12,6 +18,10 @@ import java.net.http.HttpResponse;
 
 import java.time.Duration;
 
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.apache.catalina.Context;
 import org.apache.catalina.startup.Tomcat;
 
 import org.junit.jupiter.api.AfterAll;
@@ -119,16 +129,85 @@ public class VatLookupServletTest {
 	 * A registry that stops answering must not become a request that never
 	 * ends.
 	 */
-	@Disabled("T2")
 	@Test
-	public void testUpstreamStallIsBounded() {
-		Assertions.fail("Not implemented");
+	public void testUpstreamStallIsBounded() throws Exception {
+
+		// The stand-in registry cannot stall us: its slowest answer, five
+		// seconds, is inside our timeout on purpose. This registry takes the
+		// connection and then says nothing for as long as the test runs.
+
+		List<Socket> sockets = new CopyOnWriteArrayList<>();
+
+		try (ServerSocket serverSocket = new ServerSocket(0)) {
+			Thread.ofVirtual(
+			).start(
+				() -> {
+					try {
+						while (true) {
+							sockets.add(serverSocket.accept());
+						}
+					}
+					catch (IOException ioException) {
+						// The server socket was closed: the test is over
+					}
+				}
+			);
+
+			Tomcat tomcat = _startVatLookup(
+				new UpstreamVatClient(
+					"http://localhost:" + serverSocket.getLocalPort(),
+					UpstreamVatServlet.API_KEY));
+
+			try {
+				long start = System.nanoTime();
+
+				HttpResponse<String> httpResponse = _get(
+					tomcat.getConnector(
+					).getLocalPort(),
+					"ESB12345678");
+
+				Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+
+				JsonNode jsonNode = _json(httpResponse);
+
+				Assertions.assertEquals(502, httpResponse.statusCode());
+				Assertions.assertEquals(
+					VatLookupStatus.ERROR.name(), _status(jsonNode));
+				Assertions.assertEquals(
+					"UPSTREAM_TIMEOUT", jsonNode.path("reason").asText());
+
+				// The connection was made, so what gave up was the wait for an
+				// answer: not before its bound, and not long after it.
+
+				Assertions.assertFalse(
+					sockets.isEmpty(), "The silent registry was never reached");
+				Assertions.assertTrue(
+					elapsed.compareTo(UpstreamVatClient.RESPONSE_TIMEOUT) >= 0,
+					"Gave up before the timeout, after " + elapsed.toMillis() +
+						"ms");
+				Assertions.assertTrue(
+					elapsed.compareTo(
+						UpstreamVatClient.RESPONSE_TIMEOUT.plusSeconds(2)) < 0,
+					"Gave up too long after the timeout, after " +
+						elapsed.toMillis() + "ms");
+			}
+			finally {
+				for (Socket socket : sockets) {
+					socket.close();
+				}
+
+				tomcat.stop();
+				tomcat.destroy();
+			}
+		}
 	}
 
-	private static HttpResponse<String> _get(String vatId) throws Exception {
+	private static HttpResponse<String> _get(int port, String vatId)
+		throws Exception {
+
 		HttpRequest httpRequest = HttpRequest.newBuilder(
 			URI.create(
-				"http://localhost:" + _PORT + "/o/vat/lookup?vatId=" + vatId)
+				"http://localhost:" + port + "/o/vat/lookup?vatId=" + vatId)
 		).timeout(
 			Duration.ofSeconds(30)
 		).GET(
@@ -138,10 +217,45 @@ public class VatLookupServletTest {
 			httpRequest, HttpResponse.BodyHandlers.ofString());
 	}
 
+	private static HttpResponse<String> _get(String vatId) throws Exception {
+		return _get(_PORT, vatId);
+	}
+
 	private static JsonNode _json(HttpResponse<String> httpResponse)
 		throws Exception {
 
 		return _objectMapper.readTree(httpResponse.body());
+	}
+
+	/**
+	 * Starts the lookup endpoint alone, on a free port, against a registry of
+	 * the test's choosing, with a budget of its own.
+	 */
+	private static Tomcat _startVatLookup(UpstreamVatClient upstreamVatClient)
+		throws Exception {
+
+		File baseDir = new File(
+			System.getProperty("java.io.tmpdir"), "vat-lookup-test");
+
+		baseDir.mkdirs();
+
+		Tomcat tomcat = new Tomcat();
+
+		tomcat.setBaseDir(baseDir.getAbsolutePath());
+		tomcat.setPort(0);
+		tomcat.getConnector();
+
+		Context context = tomcat.addContext("", baseDir.getAbsolutePath());
+
+		Tomcat.addServlet(
+			context, "vatLookup",
+			new VatLookupServlet(upstreamVatClient, new UpstreamRateLimiter()));
+
+		context.addServletMappingDecoded("/o/vat/lookup", "vatLookup");
+
+		tomcat.start();
+
+		return tomcat;
 	}
 
 	private static String _status(JsonNode jsonNode) {

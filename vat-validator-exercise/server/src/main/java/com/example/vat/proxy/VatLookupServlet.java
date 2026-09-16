@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 
 import java.util.Locale;
 
@@ -31,14 +32,24 @@ import java.util.Locale;
  * </p>
  *
  * <p>
- * TODO (T2, T3): the call to the registry is still unbounded, unrationed and
- * unshared.
+ * Every call to the registry is bounded in time by {@link UpstreamVatClient}
+ * and rationed by one {@link UpstreamRateLimiter} shared across the process.
+ * When the ration is spent we refuse before calling, with our own
+ * <code>429</code>.
+ * </p>
+ *
+ * <p>
+ * TODO (T3): the call to the registry is still unshared.
  * </p>
  */
 public class VatLookupServlet extends HttpServlet {
 
-	public VatLookupServlet(UpstreamVatClient upstreamVatClient) {
+	public VatLookupServlet(
+		UpstreamVatClient upstreamVatClient,
+		UpstreamRateLimiter upstreamRateLimiter) {
+
 		_upstreamVatClient = upstreamVatClient;
+		_upstreamRateLimiter = upstreamRateLimiter;
 	}
 
 	@Override
@@ -72,6 +83,30 @@ public class VatLookupServlet extends HttpServlet {
 		).toUpperCase(
 			Locale.ROOT
 		);
+
+		// The budget is decided before the call, not read off its failure. A
+		// spent budget is not a registry failure, so it does not take the 502
+		// below: HTTP has a status for "slow down", and the registry uses the
+		// same one.
+
+		long retryAfterSeconds = _upstreamRateLimiter.tryAcquire();
+
+		if (retryAfterSeconds > 0) {
+			log(
+				"VAT lookup for " + vatId + " refused, upstream budget spent " +
+					"for another " + retryAfterSeconds + "s");
+
+			httpServletResponse.setStatus(_SC_TOO_MANY_REQUESTS);
+			httpServletResponse.setHeader(
+				"Retry-After", String.valueOf(retryAfterSeconds));
+
+			_write(
+				httpServletResponse,
+				_objectMapper.writeValueAsString(
+					VatLookupResponse.error("OWN_RATE_LIMIT_EXCEEDED")));
+
+			return;
+		}
 
 		VatLookupResponse vatLookupResponse = _lookup(vatId);
 
@@ -147,6 +182,15 @@ public class VatLookupServlet extends HttpServlet {
 		try {
 			return _classify(_upstreamVatClient.lookup(vatId));
 		}
+		catch (HttpTimeoutException httpTimeoutException) {
+
+			// Either bound in UpstreamVatClient. A registry that is slow or
+			// silent is worth watching apart from one we cannot reach at all.
+
+			log("VAT lookup timed out for " + vatId, httpTimeoutException);
+
+			return VatLookupResponse.error("UPSTREAM_TIMEOUT");
+		}
 		catch (Exception exception) {
 			if (exception instanceof InterruptedException) {
 				Thread.currentThread(
@@ -190,11 +234,14 @@ public class VatLookupServlet extends HttpServlet {
 		printWriter.write(body);
 	}
 
+	private static final int _SC_TOO_MANY_REQUESTS = 429;
+
 	private static final ObjectMapper _objectMapper = new ObjectMapper(
 	).setSerializationInclusion(
 		JsonInclude.Include.NON_NULL
 	);
 
+	private final UpstreamRateLimiter _upstreamRateLimiter;
 	private final UpstreamVatClient _upstreamVatClient;
 
 }
