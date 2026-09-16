@@ -32,24 +32,21 @@ import java.util.Locale;
  * </p>
  *
  * <p>
- * Every call to the registry is bounded in time by {@link UpstreamVatClient}
- * and rationed by one {@link UpstreamRateLimiter} shared across the process.
- * When the ration is spent we refuse before calling, with our own
+ * Every call to the registry is bounded in time by {@link UpstreamVatClient}.
+ * Whether a call is made at all is up to {@link VatLookupCache}: a number
+ * asked for recently, or being looked up right now, is answered without one,
+ * and a new call is made only if the {@link UpstreamRateLimiter} shared across
+ * the process has a slot for it. When it has none, we refuse with our own
  * <code>429</code>.
- * </p>
- *
- * <p>
- * TODO (T3): the call to the registry is still unshared.
  * </p>
  */
 public class VatLookupServlet extends HttpServlet {
 
 	public VatLookupServlet(
-		UpstreamVatClient upstreamVatClient,
-		UpstreamRateLimiter upstreamRateLimiter) {
+		UpstreamVatClient upstreamVatClient, VatLookupCache vatLookupCache) {
 
 		_upstreamVatClient = upstreamVatClient;
-		_upstreamRateLimiter = upstreamRateLimiter;
+		_vatLookupCache = vatLookupCache;
 	}
 
 	@Override
@@ -75,30 +72,32 @@ public class VatLookupServlet extends HttpServlet {
 		}
 
 		// Normalizing is the server's job and happens exactly once, here.
-		// Everything downstream -- the registry call today, the cache key in
-		// T3 -- sees the normalized value only, so "es b12345678 " and
-		// "ESB12345678" cannot become two different lookups.
+		// Everything downstream -- the cache key and the registry call -- sees
+		// the normalized value only, so "es b12345678 " and "ESB12345678"
+		// cannot become two different lookups.
 
 		vatId = vatId.trim(
 		).toUpperCase(
 			Locale.ROOT
 		);
 
-		// The budget is decided before the call, not read off its failure. A
-		// spent budget is not a registry failure, so it does not take the 502
-		// below: HTTP has a status for "slow down", and the registry uses the
-		// same one.
+		// The cache decides whether this takes a new call, and only a new call
+		// takes budget. The budget is decided before the call, not read off
+		// its failure. A spent budget is not a registry failure, so it does not
+		// take the 502 below: HTTP has a status for "slow down", and the
+		// registry uses the same one.
 
-		long retryAfterSeconds = _upstreamRateLimiter.tryAcquire();
+		VatLookupCache.Result result = _vatLookupCache.get(
+			vatId, this::_lookup);
 
-		if (retryAfterSeconds > 0) {
+		if (result.isRefused()) {
 			log(
 				"VAT lookup for " + vatId + " refused, upstream budget spent " +
-					"for another " + retryAfterSeconds + "s");
+					"for another " + result.retryAfterSeconds() + "s");
 
 			httpServletResponse.setStatus(_SC_TOO_MANY_REQUESTS);
 			httpServletResponse.setHeader(
-				"Retry-After", String.valueOf(retryAfterSeconds));
+				"Retry-After", String.valueOf(result.retryAfterSeconds()));
 
 			_write(
 				httpServletResponse,
@@ -108,7 +107,7 @@ public class VatLookupServlet extends HttpServlet {
 			return;
 		}
 
-		VatLookupResponse vatLookupResponse = _lookup(vatId);
+		VatLookupResponse vatLookupResponse = result.response();
 
 		if (vatLookupResponse.getStatus() == VatLookupStatus.ERROR) {
 
@@ -241,7 +240,7 @@ public class VatLookupServlet extends HttpServlet {
 		JsonInclude.Include.NON_NULL
 	);
 
-	private final UpstreamRateLimiter _upstreamRateLimiter;
 	private final UpstreamVatClient _upstreamVatClient;
+	private final VatLookupCache _vatLookupCache;
 
 }

@@ -4,6 +4,7 @@ import com.example.vat.cx.ClientExtensionRegistry;
 import com.example.vat.cx.ClientExtensionServlet;
 import com.example.vat.proxy.UpstreamRateLimiter;
 import com.example.vat.proxy.UpstreamVatClient;
+import com.example.vat.proxy.VatLookupCache;
 import com.example.vat.proxy.VatLookupServlet;
 import com.example.vat.upstream.UpstreamVatServlet;
 import com.example.vat.web.CheckoutServlet;
@@ -74,7 +75,7 @@ public class HostServer {
 				new UpstreamVatClient(
 					"http://localhost:" + (port + 1),
 					UpstreamVatServlet.API_KEY),
-				new UpstreamRateLimiter()),
+				new VatLookupCache(new UpstreamRateLimiter())),
 			"/o/vat/lookup");
 
 		tomcat.start();
