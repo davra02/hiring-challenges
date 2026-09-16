@@ -46,8 +46,9 @@ import org.junit.jupiter.api.Test;
  * browser receives.
  *
  * <p>
- * The first two are green on a fresh clone. The rest describe behavior that
- * does not exist yet.
+ * The tests that need the registry to misbehave in a particular way, stalling
+ * or counting its calls, start their own lookup endpoint against a registry of
+ * their own, so they neither wait on nor spend the shared server's budget.
  * </p>
  */
 public class VatLookupServletTest {
