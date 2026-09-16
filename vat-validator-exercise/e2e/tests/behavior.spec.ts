@@ -2,7 +2,7 @@ import {expect, test} from '@playwright/test';
 
 // Enable these and make them pass.
 
-test.skip('typing a full number costs one lookup, not one per keystroke', async ({
+test('typing a full number costs one lookup, not one per keystroke', async ({
 	page,
 }) => {
 	const lookups: string[] = [];
@@ -24,7 +24,7 @@ test.skip('typing a full number costs one lookup, not one per keystroke', async 
 	expect(lookups.length).toBeLessThanOrEqual(2);
 });
 
-test.skip('the two instances do not write into each other', async ({page}) => {
+test('the two instances do not write into each other', async ({page}) => {
 	await page.goto('/checkout');
 
 	await page
@@ -40,7 +40,7 @@ test.skip('the two instances do not write into each other', async ({page}) => {
 	).toContainText('Enter a VAT number');
 });
 
-test.skip('a number the registry cannot check is not called invalid', async ({
+test('a number the registry cannot check is not called invalid', async ({
 	page,
 }) => {
 	await page.goto('/checkout');
