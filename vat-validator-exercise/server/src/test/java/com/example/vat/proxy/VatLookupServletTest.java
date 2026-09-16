@@ -2,6 +2,9 @@ package com.example.vat.proxy;
 
 import com.example.vat.HostServer;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -55,12 +58,15 @@ public class VatLookupServletTest {
 	public void testRegisteredNumber() throws Exception {
 		HttpResponse<String> httpResponse = _get("ESB12345678");
 
+		JsonNode jsonNode = _json(httpResponse);
+
 		Assertions.assertEquals(200, httpResponse.statusCode());
+		Assertions.assertEquals(
+			VatLookupStatus.REGISTERED.name(), _status(jsonNode));
 		Assertions.assertTrue(
-			httpResponse.body(
-			).contains(
-				"\"valid\":true"
-			));
+			jsonNode.hasNonNull("name"),
+			"A registered number carries the trader's name: " +
+				httpResponse.body());
 	}
 
 	/**
@@ -68,22 +74,45 @@ public class VatLookupServletTest {
 	 * browser has to be able to tell the two apart without parsing somebody
 	 * else's error format.
 	 */
-	@Disabled("T1")
 	@Test
-	public void testUncheckableNumberIsNotReportedAsInvalid() {
-		Assertions.fail("Not implemented");
+	public void testUncheckableNumberIsNotReportedAsInvalid() throws Exception {
+
+		// The registry cannot reach the member state for anything ending in
+		// a nine, and says so without saying anything about the number.
+
+		HttpResponse<String> httpResponse = _get("ESB12345679");
+
+		JsonNode jsonNode = _json(httpResponse);
+
+		Assertions.assertEquals(200, httpResponse.statusCode());
+
+		// The point of the test: an answer we could not get must never reach
+		// the customer as a verdict on their number.
+
+		Assertions.assertNotEquals(
+			VatLookupStatus.NOT_REGISTERED.name(), _status(jsonNode),
+			"An uncheckable number was reported as unregistered: " +
+				httpResponse.body());
+
+		Assertions.assertEquals(
+			VatLookupStatus.UNAVAILABLE.name(), _status(jsonNode));
+
+		// And it carries the registry's own reason, which is what makes the
+		// outcome actionable rather than merely not-wrong.
+
+		Assertions.assertEquals(
+			"MEMBER_STATE_UNAVAILABLE", jsonNode.path("reason").asText());
 	}
 
 	@Test
 	public void testUnregisteredNumber() throws Exception {
 		HttpResponse<String> httpResponse = _get("ESB00000000");
 
+		JsonNode jsonNode = _json(httpResponse);
+
 		Assertions.assertEquals(200, httpResponse.statusCode());
-		Assertions.assertTrue(
-			httpResponse.body(
-			).contains(
-				"\"valid\":false"
-			));
+		Assertions.assertEquals(
+			VatLookupStatus.NOT_REGISTERED.name(), _status(jsonNode));
 	}
 
 	/**
@@ -109,9 +138,23 @@ public class VatLookupServletTest {
 			httpRequest, HttpResponse.BodyHandlers.ofString());
 	}
 
+	private static JsonNode _json(HttpResponse<String> httpResponse)
+		throws Exception {
+
+		return _objectMapper.readTree(httpResponse.body());
+	}
+
+	private static String _status(JsonNode jsonNode) {
+		return jsonNode.path(
+			"status"
+		).asText();
+	}
+
 	private static final int _PORT = 8099;
 
 	private static final HttpClient _httpClient = HttpClient.newHttpClient();
+
+	private static final ObjectMapper _objectMapper = new ObjectMapper();
 
 	private static Tomcat _tomcat;
 
