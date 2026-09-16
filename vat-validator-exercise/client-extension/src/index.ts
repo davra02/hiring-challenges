@@ -4,10 +4,11 @@
  * It renders an input, asks the microservice whether the number is registered,
  * and shows the answer as one of the four outcomes of /o/vat/lookup.
  *
- * It asks sparingly: once the customer pauses on something that looks like a
- * VAT number, always when they leave the field, and never twice in a row for
- * the same value. Every question takes a sequence token, and an answer is only
- * shown if no newer question has been asked since.
+ * It asks sparingly: once the customer pauses typing, straight away when they
+ * leave the field, and never twice in a row for the same value. It makes no
+ * guess about what a VAT number looks like; the registry decides. Every
+ * question takes a sequence token, and an answer is only shown if no newer
+ * question has been asked since.
  *
  * Everything it knows lives on the instance, so the page can place it as many
  * times as it likes.
@@ -30,7 +31,8 @@ type FieldState =
 	| 'registered'
 	| 'unavailable';
 
-// Past the server's own worst case: 1.5s to connect plus 7.5s to answer.
+// Past the server's own worst case: its 7.5s request timeout, which already
+// includes connecting.
 
 const CLIENT_TIMEOUT_MS = 10000;
 
@@ -88,17 +90,6 @@ function isLookupResponse(body: unknown): body is LookupResponse {
 	const {status} = body as {status?: unknown};
 
 	return typeof status === 'string' && Object.hasOwn(STATES, status);
-}
-
-/**
- * Whether a value is worth asking about while the customer is still typing:
- * two letters, then enough characters to reach the shortest EU VAT number.
- *
- * Deliberately loose. It only decides when to ask, never what the answer
- * means, and leaving the field asks regardless.
- */
-function looksLikeVatId(vatId: string) {
-	return vatId.length >= 8 && /^[a-z]{2}/i.test(vatId);
 }
 
 class VatField extends HTMLElement {
@@ -186,12 +177,14 @@ class VatField extends HTMLElement {
 			return;
 		}
 
-		if (looksLikeVatId(vatId)) {
-			this._debounceTimer = setTimeout(
-				() => this._lookup(vatId),
-				DEBOUNCE_MS
-			);
-		}
+		// Any edit is asked about once typing pauses, so an answer about a value
+		// that is no longer in the field is replaced as soon as the customer
+		// stops.
+
+		this._debounceTimer = setTimeout(
+			() => this._lookup(vatId),
+			DEBOUNCE_MS
+		);
 	}
 
 	private _render(state: FieldState, name?: string) {

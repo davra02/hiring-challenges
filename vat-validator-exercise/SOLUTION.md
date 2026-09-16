@@ -59,10 +59,10 @@ served even when there is no budget to refresh it.
 
 ## 3. Which answer the element shows
 
-- **When it asks:** 600 ms after the last keystroke if the value looks like a
-  VAT number (two letters, 8+ characters, the shortest EU length), and always
-  on blur, cancelling the debounce. The heuristic decides when to ask, never
-  what an answer means.
+- **When it asks:** 600 ms after the last keystroke, and straight away on
+  blur, cancelling the pending debounce. Neither the element nor the server
+  guesses what a VAT number looks like: the registry has no "malformed"
+  outcome, so it decides.
 - **Not twice:** a value is not asked again while its answer is a verdict
   (`registered`, `not-registered`). `unavailable` and `error` say "try again",
   so they release the value; the server's cache absorbs the retry.
@@ -98,8 +98,11 @@ served even when there is no budget to refresh it.
   is first come, first served: there is no customer identity to ration by.
 - **Mid-body stalls.** The JDK timeout stops at the response headers. Closing
   that needs `sendAsync` with an overall deadline.
-- **Smaller gaps.** A value that stops passing the heuristic keeps the previous
-  answer until blur. Two widgets without `data-field` share an id. There is no
-  server-side format check, since the registry has no "malformed" outcome.
+- **Slow typing costs budget.** A pause of more than 600 ms mid-number asks
+  about a partial number, and the cache cannot absorb it because every prefix
+  is a new key. A longer debounce reduces that without guessing formats.
+- **Smaller gaps.** Separators inside the number (`FRXX 999999999`) are not
+  stripped, so that is a different lookup. Two widgets without `data-field`
+  share an id.
 - **A weak scaffold test.** "Not called invalid" passes as soon as the page
   loads. I checked the `UNAVAILABLE` rendering by hand.
